@@ -1,0 +1,214 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model College {
+  id String @id @default(uuid()) @db.Uuid
+
+  name        String @unique @db.VarChar(35)
+  websiteLink String @unique @map("website_link") @db.VarChar(250) // https://colleges.su.edu.krd/
+
+  // College 1:M Department
+  Departments Department[]
+
+  @@map("colleges")
+}
+
+model Department {
+  id String @id @default(uuid()) @db.Uuid
+
+  name String @db.VarChar(45)
+
+  // College 1:M Department
+  College   College @relation(fields: [collegeId], references: [id])
+  collegeId String  @map("college_id") @db.Uuid
+
+  // Department 1:M Person
+  Supervisors Person[]
+
+  // Department 1:M Project
+  Projects Project[]
+
+  @@map("departments")
+}
+
+enum Gender {
+  Male
+  Female
+}
+
+model Person {
+  id String @id @default(uuid()) @db.Uuid
+
+  fullName String @map("full_name") @db.VarChar(50)
+
+  dateOfBirth DateTime @map("date_of_birth") @db.Date
+
+  collegeEmail String @unique @map("college_email") @db.VarChar(255)
+
+  gender Gender @default(Male)
+
+  // Person 1:1 User
+  User User?
+
+  // Person 1:1 Supervisor
+  Supervisor Supervisor?
+
+  // Person 1:1 Student
+  Student Student?
+
+  // Department 1:M Supervisors
+  Department   Department @relation(fields: [departmentId], references: [id])
+  departmentId String     @map("department_id") @db.Uuid
+
+  @@map("people")
+}
+
+model User {
+  id String @id @default(uuid()) @db.Uuid
+
+  // : TODO: check length
+  username String @unique @db.VarChar(30)
+
+  // : NOTE: argon2 hash maximum length
+  password String @db.Char(97)
+
+  token String @map("token") @db.VarChar(255)
+
+  // : TODO: By default (in active) until it is approved by the email verification
+  isActive Boolean @default(true) @map("is_active") @db.Boolean
+
+  dateCreated DateTime @default(now()) @map("date_created") @db.Date
+  dateUpdated DateTime @updatedAt @map("date_updated") @db.Date
+
+  Role Role?
+
+  // Person 1:1 User
+  Person   Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+  personId String @unique @map("person_id") @db.Uuid
+
+  @@map("users")
+}
+
+model Role {
+  id String @id @default(uuid()) @db.Uuid
+
+  // User 1:1 Role
+  User   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String @unique @map("user_id") @db.Uuid
+
+  Permissions Permission[]
+}
+
+enum PermissionType {
+  CREATE
+  READ
+  UPDATE
+  DELETE
+}
+
+enum DocType {
+  COLLEGE
+  DEPARTMENT
+  USER
+  STUDENT
+  SUPERVISOR
+  PROJECT
+  ROLE
+  PERMISSION
+}
+
+model Permission {
+  id String @id @default(uuid()) @db.Uuid
+
+  Role   Role   @relation(fields: [roleId], references: [id])
+  roleId String @db.Uuid
+
+  permissionType PermissionType @default(READ) @map("permission_type")
+
+  docType DocType @default(COLLEGE) @map("doc_type")
+
+  @@unique([roleId, permissionType, docType])
+  @@map("permissions")
+}
+
+model Supervisor {
+  id String @id @default(uuid()) @db.Uuid
+
+  // Person 1:1 Supervisor
+  Person   Person @relation(fields: [personId], references: [id])
+  personId String @unique @map("person_id") @db.Uuid
+
+  // Supervisor 1:1 Project
+  Projects Project[]
+
+  @@map("supervisors")
+}
+
+model Project {
+  id String @id @default(uuid()) @db.Uuid
+
+  name String @db.VarChar(50)
+  rate Float // 100%
+  year Int    @db.Integer
+
+  // Department 1:M Project
+  Department   Department @relation(fields: [departmentId], references: [id])
+  departmentId String     @map("department_id") @db.Uuid
+
+  // Supervisor 1:M Project
+  Supervisor   Supervisor @relation(fields: [supervisorId], references: [id])
+  supervisorId String     @map("supervisor_id") @db.Uuid
+
+  // Project 1:M ProjectDocument
+  Documents ProjectDocument[]
+
+  // Project 1:M Student
+  Students Student[]
+
+  @@map("project")
+}
+
+model ProjectDocument {
+  id String @id @default(uuid()) @db.Uuid
+
+  name String @db.VarChar(36)
+
+  // : TODO: check how many chars
+  // pdf, doc, docx, ppt, pptx, png, svg, jpg, jpeg, mp4, 
+  type String @db.VarChar(10)
+
+  path String @unique @default(uuid()) @db.Uuid
+
+  dateCreated DateTime @default(now()) @map("date_created") @db.Date
+  dateUpdated DateTime @updatedAt @map("date_updated") @db.Date
+
+  // Project 1:M ProjectDocument
+  Project   Project @relation(fields: [projectId], references: [id])
+  projectId String  @map("project_id") @db.Uuid
+
+  @@map("projects_documents") // or research_documents
+}
+
+model Student {
+  id String @id @default(uuid()) @db.Uuid
+
+  personalEmail String @map("personal_email") @db.VarChar(255)
+
+  // Person 1:1 Student
+  Person    Person  @relation(fields: [personId], references: [id])
+  personId  String  @unique @map("person_id") @db.Uuid
+  // Project 1:M Student
+  Project   Project @relation(fields: [projectId], references: [id])
+  projectId String  @map("project_id") @db.Uuid
+
+  @@map("students")
+}
